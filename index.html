@@ -27,11 +27,10 @@
       <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium w-full sm:w-auto" onclick="toggleCamera()">📷 Mở/Tắt Camera Scan</button>
     </div>
 
-    <!-- Camera Container: Chiều cao rất hẹp (h-24), mở rộng tối đa chiều ngang (max-w-4xl) -->
+    <!-- Camera Container -->
     <div id="videoContainer" class="hidden mb-3 relative bg-black rounded-lg overflow-hidden w-full max-w-4xl mx-auto border-2 border-emerald-500 shadow-inner">
       <div class="relative w-full h-24">
         <video id="video" autoplay playsinline class="w-full h-full object-cover"></video>
-        <!-- Khung ngắm định vị câu hỏi -->
         <div class="absolute inset-x-2 inset-y-2 border border-dashed border-yellow-400 pointer-events-none flex items-center justify-center">
           <span class="text-[10px] text-yellow-300 bg-black/60 px-2 py-0.5 rounded">Căn dòng câu hỏi vào khung này</span>
         </div>
@@ -80,7 +79,6 @@
     let searchTimeout;
     let stream = null;
 
-    // Khởi tạo & Tự động nạp data.json
     window.addEventListener('DOMContentLoaded', () => {
       fetch('./data.json')
         .then(res => {
@@ -107,10 +105,8 @@
         .trim();
     }
 
-    // Xử lý loại bỏ từ thừa giao diện thi trước khi tìm kiếm
     function cleanQuestionText(text) {
       let cleaned = removeAccents(text);
-      // Bỏ các từ tiêu đề giao diện thi thường bị dính vào OCR
       const ignoreWords = ["cau hoi", "thi thu", "bai thi", "danh sach", "tiep theo", "nop bai", "trong so"];
       ignoreWords.forEach(w => {
         cleaned = cleaned.replace(new RegExp(w, 'g'), '');
@@ -195,7 +191,6 @@
       arr.forEach((row, index) => {
         const correctIdx = Number(row[6]);
 
-        // Desktop
         const tr = document.createElement("tr");
         for (let i = 0; i < 8; i++) {
           const td = document.createElement("td");
@@ -213,7 +208,6 @@
         }
         tbody.appendChild(tr);
 
-        // Mobile Card
         const card = document.createElement("div");
         card.className = "p-3 border rounded-lg bg-white shadow-sm text-sm space-y-2";
         
@@ -295,336 +289,21 @@
       const status = document.getElementById('ocrStatus');
       const ctx = canvas.getContext('2d');
       
-      // Lấy kích thước thực tế của luồng video
       const vWidth = video.videoWidth;
       const vHeight = video.videoHeight;
 
-      // Cắt riêng vùng trung tâm dạng thanh ngang hẹp để tránh lấn vào đáp án hoặc thanh tiêu đề
-      const cropHeight = Math.floor(vHeight * 0.35); // Lấy 35% chiều cao ở giữa
+      const cropHeight = Math.floor(vHeight * 0.35);
       const cropY = Math.floor((vHeight - cropHeight) / 2);
 
       canvas.width = vWidth;
       canvas.height = cropHeight;
 
-      // Vẽ vùng ảnh đã được cắt vào Canvas
       ctx.drawImage(video, 0, cropY, vWidth, cropHeight, 0, 0, vWidth, cropHeight);
 
       status.style.display = 'block';
       try {
         const result = await Tesseract.recognize(canvas.toDataURL('image/png'), 'vie');
-        
         let cleanedText = cleanQuestionText(result.data.text);
-
-        document.getElementById('searchInput').value = cleanedText;
-        searchData();
-      } catch (e) {
-        alert("Lỗi khi đọc chữ từ ảnh.");
-      } finally {
-        status.style.display = 'none';
-      }
-    }
-  </script>
-</body>
-</html><!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tra Cứu Đáp Án Agribank v6.2</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-  <style>
-    .bold-blue { font-weight: bold; color: #1d4ed8; background-color: #eff6ff; }
-    .loading-ocr { display: none; color: #d97706; font-weight: bold; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-  </style>
-</head>
-<body class="bg-gray-50 p-3 md:p-6 font-sans">
-  <div class="max-w-5xl mx-auto bg-white p-4 rounded-xl shadow-md">
-    <h2 class="text-lg md:text-xl font-bold mb-3 text-gray-800">📸 Tra Cứu Đáp Án Ngân Hàng (Tối ưu JSON & Camera OCR)</h2>
-
-    <!-- File Input Controls -->
-    <div class="mb-3">
-      <label class="block text-xs font-semibold text-gray-600 mb-1">Chọn file JSON thủ công:</label>
-      <input type="file" id="jsonFile" accept=".json" class="border p-1.5 text-sm rounded w-full bg-gray-50" onchange="loadJson(event)">
-    </div>
-
-    <div class="flex justify-between items-center mb-3">
-      <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium w-full sm:w-auto" onclick="toggleCamera()">📷 Mở/Tắt Camera Scan</button>
-    </div>
-
-    <!-- Camera Container: Tăng chiều rộng nằm ngang, thu gọn chiều cao -->
-    <div id="videoContainer" class="hidden mb-3 relative bg-black rounded-lg overflow-hidden w-full max-w-xl mx-auto border-2 border-emerald-500 shadow-inner">
-      <video id="video" autoplay playsinline class="w-full h-40 object-cover mx-auto"></video>
-      <div class="p-2 bg-gray-900 text-center">
-        <button class="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold" onclick="captureImage()">✨ Chụp & Quét Chữ</button>
-      </div>
-    </div>
-    <canvas id="canvas" class="hidden"></canvas>
-    <div id="ocrStatus" class="loading-ocr mb-2 text-sm text-center">⏳ Đang nhận diện chữ từ ảnh... vui lòng đợi...</div>
-
-    <!-- Search Box -->
-    <div class="flex items-center gap-2 mb-3">
-      <input id="searchInput" type="text" placeholder="Nhập từ khóa câu hỏi hoặc văn bản quy định..." class="border p-2.5 w-full rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" onkeyup="debounceSearch()">
-      <button class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2.5 rounded-lg text-sm font-bold" onclick="clearSearch()">Xóa</button>
-    </div>
-
-    <div id="suggestionBox" class="mb-3 text-xs md:text-sm text-blue-600 font-medium">Đang tải dữ liệu...</div>
-
-    <!-- Mobile View -->
-    <div id="cardContainer" class="space-y-3 block md:hidden"></div>
-
-    <!-- Desktop View -->
-    <div class="hidden md:block overflow-x-auto">
-      <table class="w-full text-sm text-left border-collapse border border-gray-200">
-        <thead class="bg-gray-100 text-gray-700">
-          <tr>
-            <th class="border p-2 w-12 text-center">STT</th>
-            <th class="border p-2 w-1/3">Câu hỏi</th>
-            <th class="border p-2">Đáp án 1 (A)</th>
-            <th class="border p-2">Đáp án 2 (B)</th>
-            <th class="border p-2">Đáp án 3 (C)</th>
-            <th class="border p-2">Đáp án 4 (D)</th>
-            <th class="border p-2 w-16 text-center">Đúng</th>
-            <th class="border p-2 w-1/4">Căn cứ pháp lý</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <script>
-    let data = [];
-    let fuse;
-    let searchTimeout;
-    let stream = null;
-
-    // Khởi tạo & Tự động nạp data.json
-    window.addEventListener('DOMContentLoaded', () => {
-      fetch('./data.json')
-        .then(res => {
-          if (!res.ok) throw new Error();
-          return res.json();
-        })
-        .then(jsonData => {
-          processData(jsonData);
-          document.getElementById("suggestionBox").textContent = `Đã nạp tự động ${data.length} câu hỏi từ data.json.`;
-        })
-        .catch(() => {
-          document.getElementById("suggestionBox").textContent = 'Không thấy data.json mặc định. Vui lòng chọn file JSON thủ công.';
-        });
-    });
-
-    function removeAccents(str) {
-      return (str || "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d").replace(/Đ/g, "D")
-        .replace(/[^\w\s]/gi, ' ') // Xóa các ký tự đặc biệt gây nhiễu
-        .replace(/\s+/g, ' ')
-        .toLowerCase()
-        .trim();
-    }
-
-    // Chuẩn hóa dữ liệu linh hoạt từ JSON
-    function processData(inputData) {
-      let rawRows = [];
-
-      if (Array.isArray(inputData)) {
-        rawRows = inputData;
-      } else if (inputData && Array.isArray(inputData.data_table)) {
-        rawRows = inputData.data_table.map(item => [
-          item.col_1, item.col_2, item.col_3, item.col_4, 
-          item.col_5, item.col_6, item.col_7, item.col_8
-        ]);
-      }
-
-      data = rawRows.map((r, i) => {
-        let questionText = Array.isArray(r) ? (r[1] || "") : (r.question || r.col_2 || "");
-        let correctAns = Array.isArray(r) ? (r[6] || "") : (r.correct || r.col_7 || "");
-        
-        correctAns = correctAns.toString().trim().toUpperCase();
-        if (correctAns === "A") correctAns = 1; 
-        else if (correctAns === "B") correctAns = 2;
-        else if (correctAns === "C") correctAns = 3; 
-        else if (correctAns === "D") correctAns = 4;
-        else correctAns = Number(correctAns);
-
-        let rowArr = Array.isArray(r) ? r : [
-          r.id || (i + 1), questionText, 
-          r.ans1 || r.col_3 || "", r.ans2 || r.col_4 || "", 
-          r.ans3 || r.col_5 || "", r.ans4 || r.col_6 || "", 
-          correctAns, r.legal || r.col_8 || ""
-        ];
-
-        rowArr[6] = correctAns;
-
-        return { 
-          id: rowArr[0] || (i + 1), 
-          question: questionText, 
-          normalized: removeAccents(questionText + " " + (rowArr[7] || "")), 
-          raw: rowArr 
-        };
-      });
-
-      // Cấu hình Fuse.js giúp tìm kiếm mượt và chính xác hơn khi câu dài
-      fuse = new Fuse(data, { 
-        keys: ["normalized"], 
-        threshold: 0.5,           // Mở rộng độ lệch để chấp nhận lỗi sai chính tả nhẹ từ OCR
-        distance: 1000, 
-        ignoreLocation: true, 
-        ignoreFieldNorm: true     // Không phạt điểm độ dài văn bản khi khớp từ khóa
-      });
-      
-      renderResults(data.map(d => d.raw));
-    }
-
-    function loadJson(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const jsonData = JSON.parse(e.target.result);
-          processData(jsonData);
-          document.getElementById("suggestionBox").textContent = `Đã nạp thành công ${data.length} câu hỏi từ JSON.`;
-        } catch (err) {
-          alert("Lỗi khi đọc file JSON. Vui lòng kiểm tra định dạng.");
-        }
-      };
-      reader.readAsText(file, "UTF-8");
-    }
-
-    function renderResults(arr) {
-      const tbody = document.getElementById("tableBody");
-      const cardContainer = document.getElementById("cardContainer");
-      tbody.innerHTML = "";
-      cardContainer.innerHTML = "";
-
-      arr.forEach((row, index) => {
-        const correctIdx = Number(row[6]);
-
-        // 1. Desktop Render
-        const tr = document.createElement("tr");
-        for (let i = 0; i < 8; i++) {
-          const td = document.createElement("td");
-          td.className = "border p-2";
-          
-          if (i === 0) td.className += " text-center font-semibold";
-          if (i === 6) td.className += " text-center font-bold text-blue-600";
-          if (i === 7) td.className += " text-xs text-gray-500 italic";
-
-          td.innerHTML = row[i] ?? "";
-          if (i >= 2 && i <= 5 && (i - 1) === correctIdx) {
-            td.classList.add("bold-blue");
-          }
-          tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-
-        // 2. Mobile Card Render
-        const card = document.createElement("div");
-        card.className = "p-3 border rounded-lg bg-white shadow-sm text-sm space-y-2";
-        
-        let answersHtml = "";
-        for (let a = 2; a <= 5; a++) {
-          const isCorrect = (a - 1) === correctIdx;
-          if (row[a]) {
-            answersHtml += `
-              <div class="p-2 rounded-md ${isCorrect ? 'bg-blue-100 text-blue-800 font-bold border border-blue-300' : 'text-gray-700 bg-gray-50'}">
-                ${isCorrect ? '✓ ' : ''}${row[a]}
-              </div>`;
-          }
-        }
-
-        const legalInfo = row[7] ? `<div class="text-xs text-gray-500 italic mt-1 bg-amber-50 p-1.5 rounded border border-amber-100">📌 Căn cứ: ${row[7]}</div>` : '';
-
-        card.innerHTML = `
-          <div class="font-semibold text-gray-900">Câu ${row[0] || (index + 1)}: ${row[1]}</div>
-          <div class="space-y-1">${answersHtml}</div>
-          ${legalInfo}
-        `;
-        cardContainer.appendChild(card);
-      });
-    }
-
-    function debounceSearch() {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(searchData, 300);
-    }
-
-    function searchData() {
-      const rawInput = document.getElementById("searchInput").value;
-      const kw = removeAccents(rawInput);
-      
-      if (!kw) { 
-        renderResults(data.map(d => d.raw)); 
-        document.getElementById("suggestionBox").textContent = `Đang hiển thị toàn bộ ${data.length} câu hỏi.`;
-        return; 
-      }
-      if (!fuse) return;
-
-      const res = fuse.search(kw);
-      renderResults(res.slice(0, 40).map(r => r.item.raw));
-      document.getElementById("suggestionBox").textContent = `Tìm thấy ${res.length} kết quả phù hợp.`;
-    }
-
-    function clearSearch() {
-      document.getElementById("searchInput").value = "";
-      searchData();
-    }
-
-    async function toggleCamera() {
-      const container = document.getElementById('videoContainer');
-      const video = document.getElementById('video');
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-        container.classList.add('hidden');
-      } else {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-              facingMode: "environment",
-              width: { ideal: 1920 },
-              height: { ideal: 1080 }
-            } 
-          });
-          video.srcObject = stream;
-          container.classList.remove('hidden');
-        } catch (err) {
-          alert("Không thể mở Camera. Vui lòng cấp quyền truy cập camera cho trình duyệt.");
-        }
-      }
-    }
-
-    async function captureImage() {
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('canvas');
-      const status = document.getElementById('ocrStatus');
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-
-      status.style.display = 'block';
-      try {
-        const result = await Tesseract.recognize(canvas.toDataURL('image/png'), 'vie');
-        // Làm sạch văn bản OCR: Bỏ xuống dòng, cắt ký tự rác và lấy tối đa 18 từ đầu tiên để tránh gây nhiễu
-        let cleanedText = result.data.text
-          .replace(/\n/g, ' ')
-          .replace(/[^\w\sàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ]/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        const words = cleanedText.split(' ');
-        if (words.length > 18) {
-          cleanedText = words.slice(0, 18).join(' ');
-        }
-
         document.getElementById('searchInput').value = cleanedText;
         searchData();
       } catch (e) {

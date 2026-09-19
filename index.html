@@ -27,9 +27,9 @@
       <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium w-full sm:w-auto" onclick="toggleCamera()">📷 Mở/Tắt Camera Scan</button>
     </div>
 
-    <!-- Camera Container: Thu hẹp chiều rộng, mở rộng chiều cao để quét 3-4 dòng -->
-    <div id="videoContainer" class="hidden mb-3 relative bg-black rounded-lg overflow-hidden max-w-xs mx-auto border-2 border-emerald-500 shadow-inner">
-      <video id="video" autoplay playsinline class="w-full h-80 object-cover mx-auto"></video>
+    <!-- Camera Container: Tăng chiều rộng nằm ngang, thu gọn chiều cao -->
+    <div id="videoContainer" class="hidden mb-3 relative bg-black rounded-lg overflow-hidden w-full max-w-xl mx-auto border-2 border-emerald-500 shadow-inner">
+      <video id="video" autoplay playsinline class="w-full h-40 object-cover mx-auto"></video>
       <div class="p-2 bg-gray-900 text-center">
         <button class="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold" onclick="captureImage()">✨ Chụp & Quét Chữ</button>
       </div>
@@ -91,7 +91,14 @@
     });
 
     function removeAccents(str) {
-      return (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+      return (str || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d").replace(/Đ/g, "D")
+        .replace(/[^\w\s]/gi, ' ') // Xóa các ký tự đặc biệt gây nhiễu
+        .replace(/\s+/g, ' ')
+        .toLowerCase()
+        .trim();
     }
 
     // Chuẩn hóa dữ liệu linh hoạt từ JSON
@@ -135,11 +142,13 @@
         };
       });
 
+      // Cấu hình Fuse.js giúp tìm kiếm mượt và chính xác hơn khi câu dài
       fuse = new Fuse(data, { 
         keys: ["normalized"], 
-        threshold: 0.35, 
+        threshold: 0.5,           // Mở rộng độ lệch để chấp nhận lỗi sai chính tả nhẹ từ OCR
         distance: 1000, 
-        ignoreLocation: true 
+        ignoreLocation: true, 
+        ignoreFieldNorm: true     // Không phạt điểm độ dài văn bản khi khớp từ khóa
       });
       
       renderResults(data.map(d => d.raw));
@@ -221,13 +230,16 @@
     }
 
     function searchData() {
-      const kw = removeAccents(document.getElementById("searchInput").value);
+      const rawInput = document.getElementById("searchInput").value;
+      const kw = removeAccents(rawInput);
+      
       if (!kw) { 
         renderResults(data.map(d => d.raw)); 
         document.getElementById("suggestionBox").textContent = `Đang hiển thị toàn bộ ${data.length} câu hỏi.`;
         return; 
       }
       if (!fuse) return;
+
       const res = fuse.search(kw);
       renderResults(res.slice(0, 40).map(r => r.item.raw));
       document.getElementById("suggestionBox").textContent = `Tìm thấy ${res.length} kết quả phù hợp.`;
@@ -250,8 +262,8 @@
           stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
               facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
             } 
           });
           video.srcObject = stream;
@@ -274,8 +286,19 @@
       status.style.display = 'block';
       try {
         const result = await Tesseract.recognize(canvas.toDataURL('image/png'), 'vie');
-        const text = result.data.text.replace(/\n/g, ' ').trim();
-        document.getElementById('searchInput').value = text;
+        // Làm sạch văn bản OCR: Bỏ xuống dòng, cắt ký tự rác và lấy tối đa 18 từ đầu tiên để tránh gây nhiễu
+        let cleanedText = result.data.text
+          .replace(/\n/g, ' ')
+          .replace(/[^\w\sàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ]/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const words = cleanedText.split(' ');
+        if (words.length > 18) {
+          cleanedText = words.slice(0, 18).join(' ');
+        }
+
+        document.getElementById('searchInput').value = cleanedText;
         searchData();
       } catch (e) {
         alert("Lỗi khi đọc chữ từ ảnh.");
@@ -286,5 +309,3 @@
   </script>
 </body>
 </html>
-```<FollowUp>
-Do you need any further adjustments to the camera frame size or OCR processing speed?

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tra Cứu Đáp Án Agribank v6.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <style>
@@ -19,24 +18,18 @@
     <h2 class="text-lg md:text-xl font-bold mb-3 text-gray-800">📸 Tra Cứu Đáp Án Ngân Hàng (Tối ưu JSON & Camera OCR)</h2>
 
     <!-- File Input Controls -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">1. Chọn file JSON thủ công:</label>
-        <input type="file" id="jsonFile" accept=".json" class="border p-1.5 text-sm rounded w-full bg-gray-50" onchange="loadJson(event)">
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">2. Hoặc chọn file Excel (.xlsx):</label>
-        <input type="file" id="excelFile" accept=".xlsx, .xls" class="border p-1.5 text-sm rounded w-full bg-gray-50" onchange="loadExcel(event)">
-      </div>
+    <div class="mb-3">
+      <label class="block text-xs font-semibold text-gray-600 mb-1">Chọn file JSON thủ công:</label>
+      <input type="file" id="jsonFile" accept=".json" class="border p-1.5 text-sm rounded w-full bg-gray-50" onchange="loadJson(event)">
     </div>
 
     <div class="flex justify-between items-center mb-3">
       <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium w-full sm:w-auto" onclick="toggleCamera()">📷 Mở/Tắt Camera Scan</button>
     </div>
 
-    <!-- Camera Container -->
-    <div id="videoContainer" class="hidden mb-3 relative bg-black rounded-lg overflow-hidden">
-      <video id="video" autoplay playsinline class="w-full max-h-64 object-contain mx-auto"></video>
+    <!-- Camera Container: Thu hẹp chiều rộng, mở rộng chiều cao để quét 3-4 dòng -->
+    <div id="videoContainer" class="hidden mb-3 relative bg-black rounded-lg overflow-hidden max-w-xs mx-auto border-2 border-emerald-500 shadow-inner">
+      <video id="video" autoplay playsinline class="w-full h-80 object-cover mx-auto"></video>
       <div class="p-2 bg-gray-900 text-center">
         <button class="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold" onclick="captureImage()">✨ Chụp & Quét Chữ</button>
       </div>
@@ -93,7 +86,7 @@
           document.getElementById("suggestionBox").textContent = `Đã nạp tự động ${data.length} câu hỏi từ data.json.`;
         })
         .catch(() => {
-          document.getElementById("suggestionBox").textContent = 'Không thấy data.json mặc định. Vui lòng chọn file JSON hoặc Excel.';
+          document.getElementById("suggestionBox").textContent = 'Không thấy data.json mặc định. Vui lòng chọn file JSON thủ công.';
         });
     });
 
@@ -101,14 +94,13 @@
       return (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
     }
 
-    // Chuẩn hóa dữ liệu linh hoạt (Xử lý cả mảng Excel, Object JSON tiêu chuẩn, hoặc cấu trúc data_table)
+    // Chuẩn hóa dữ liệu linh hoạt từ JSON
     function processData(inputData) {
       let rawRows = [];
 
       if (Array.isArray(inputData)) {
         rawRows = inputData;
       } else if (inputData && Array.isArray(inputData.data_table)) {
-        // Xử lý riêng đối với cấu trúc { "data_table": [...] }
         rawRows = inputData.data_table.map(item => [
           item.col_1, item.col_2, item.col_3, item.col_4, 
           item.col_5, item.col_6, item.col_7, item.col_8
@@ -168,20 +160,6 @@
         }
       };
       reader.readAsText(file, "UTF-8");
-    }
-
-    function loadExcel(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const wb = XLSX.read(e.target.result, { type: "binary" });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-        processData(rows.filter(r => r.length >= 2));
-        document.getElementById("suggestionBox").textContent = `Đã nạp thành công ${data.length} câu hỏi từ Excel.`;
-      };
-      reader.readAsBinaryString(file);
     }
 
     function renderResults(arr) {
@@ -269,7 +247,13 @@
         container.classList.add('hidden');
       } else {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            } 
+          });
           video.srcObject = stream;
           container.classList.remove('hidden');
         } catch (err) {
@@ -302,3 +286,5 @@
   </script>
 </body>
 </html>
+```<FollowUp>
+Do you need any further adjustments to the camera frame size or OCR processing speed?

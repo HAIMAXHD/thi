@@ -2,261 +2,242 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tìm kiếm Câu hỏi v6.1 - Tối ưu Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Agribank Scan v11.0 - @Nguyễn Văn Thuân</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
   <style>
-    body { margin: 10px 15px; font-family: Arial, sans-serif; }
-    table { width: 100%; min-width: 650px; border-collapse: collapse; table-layout: fixed; word-wrap: break-word; }
-    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; vertical-align: top; }
-    th { background-color: #f3f3f3; position: sticky; top: 0; z-index: 1; }
-    td:nth-child(1), th:nth-child(1) { width: 45px; text-align: center; }
-    td:nth-child(7), th:nth-child(7) { width: 65px; text-align: center; }
-    .bold-blue { font-weight: bold; color: #2563eb; }
-    .italic-tiny { font-style: italic; font-size: 0.85em; opacity: 0.85; }
-    .btn { background-color: #2563eb; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-    .btn-camera { background-color: #10b981; }
-    #videoContainer { display: none; position: relative; margin-bottom: 10px; }
-    #video { width: 100%; max-width: 500px; border-radius: 8px; border: 2px solid #10b981; }
-    #canvas { display: none; }
-    .loading-ocr { display: none; color: #f59e0b; font-weight: bold; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    body { background-color: #f1f5f9; font-family: ui-sans-serif, system-ui; }
+    
+    /* Thiết kế khung quét Dài và Hẹp */
+    .camera-box { position: relative; width: 100%; height: 300px; background: #000; overflow: hidden; }
+    #video { width: 100%; height: 100%; object-fit: cover; }
+    
+    .panoramic-overlay {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 92%; height: 70px;
+      border: 2px solid #10b981;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+      border-radius: 4px;
+      pointer-events: none;
+    }
+    .scan-line {
+      position: absolute; width: 100%; height: 2px;
+      background: rgba(16, 185, 129, 0.8);
+      box-shadow: 0 0 10px #10b981;
+      animation: moveLine 1.5s infinite linear;
+    }
+    @keyframes moveLine { 0% { top: 0; } 100% { top: 100%; } }
+
+    /* Hiển thị kết quả dạng thẻ */
+    .result-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 6px solid #cbd5e1; transition: all 0.3s; }
+    .result-card.best-match { border-left-color: #059669; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    
+    .ans-item { padding: 10px; border-radius: 8px; margin-top: 6px; font-size: 0.95rem; line-height: 1.4; border: 1px solid transparent; }
+    .is-true { background: #ecfdf5; color: #065f46; font-weight: 700; border-color: #34d399; }
+    .is-false { color: #64748b; opacity: 0.7; }
+    
+    .loading-state { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.8); z-index: 60; align-items: center; justify-content: center; color: white; }
   </style>
 </head>
-<body>
-  <div class="max-w-full mx-auto">
-    <h2 class="text-xl font-bold mb-3">📸 Tìm kiếm v6.1 (Tối ưu Mobile)</h2>
+<body class="pb-10">
 
-    <!-- Trạng thái nạp dữ liệu -->
-    <div id="loadingStatus" class="mb-3 p-2 bg-blue-50 text-blue-700 text-sm rounded border border-blue-200">
-      ⏳ Đang nạp dữ liệu từ <b>data_1.json</b>...
+  <div class="camera-box">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="panoramic-overlay">
+        <div class="scan-line"></div>
+        <div class="absolute -top-6 left-0 text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Vùng quét ưu tiên (ĐƯA CAMERA VÀO PHẦN CÂU HỎI)</div>
+    </div>
+    
+    <div class="absolute bottom-4 w-full px-6 flex flex-col gap-3">
+        <button onclick="smartCapture()" id="btnAction" class="bg-emerald-600 hover:bg-emerald-700 text-white w-full py-4 rounded-2xl font-black text-xl shadow-2xl active:scale-95 transition-all">
+            📸 QUÉT CÂU HỎI
+        </button>
     </div>
 
-    <!-- Khung tải file thủ công (chỉ hiện khi fetch tự động bị lỗi CORS trên điện thoại) -->
-    <div id="fallbackUpload" class="hidden mb-3 p-3 bg-yellow-50 border border-yellow-300 rounded text-sm">
-      <p class="font-bold text-yellow-800 mb-1">⚠️ Không thể tự động đọc file data_1.json (Lỗi bảo mật duyệt file trên điện thoại)</p>
-      <p class="text-gray-600 mb-2">Vui lòng chọn file <b>data_1.json</b> từ điện thoại của bạn để tiếp tục:</p>
-      <input type="file" id="jsonFileInput" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onchange="handleManualFile(event)">
-    </div>
-
-    <div class="flex flex-wrap gap-2 mb-3">
-      <button class="btn btn-camera flex items-center gap-1" onclick="toggleCamera()">📷 Mở/Tắt Camera</button>
-    </div>
-
-    <div id="videoContainer">
-      <video id="video" autoplay playsinline></video>
-      <div class="mt-2 flex gap-2">
-        <button class="btn bg-red-500" onclick="captureImage()">✨ Chụp & Tìm</button>
-      </div>
-    </div>
-    <canvas id="canvas"></canvas>
-    <div id="ocrStatus" class="loading-ocr mb-2">Đang nhận diện chữ... vui lòng đợi...</div>
-
-    <div class="flex items-center gap-2 mb-2">
-      <input id="searchInput" type="text" placeholder="Nhập từ khóa hoặc quét camera..." class="border px-3 py-2 w-full rounded text-base focus:outline-none focus:ring-2 focus:ring-blue-500" onkeyup="debounceSearch()">
-      <button class="btn bg-gray-500 text-white" onclick="clearSearch()">RESET</button>
-    </div>
-
-    <div id="suggestionBox" class="mb-2 italic text-blue-600 text-sm"></div>
-
-    <!-- Bọc bảng trong thẻ cuộn ngang cho mobile -->
-    <div class="overflow-x-auto border rounded-lg shadow-sm">
-      <table id="dataTable">
-        <thead>
-          <tr>
-            <th>STT</th>
-            <th>Câu hỏi</th>
-            <th>Đáp án 1</th>
-            <th>Đáp án 2</th>
-            <th>Đáp án 3</th>
-            <th>Đáp án 4</th>
-            <th>Đúng</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
+    <div id="loader" class="loading-state">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-500 border-t-transparent mb-2"></div>
+            <div class="text-sm font-bold tracking-tighter">ĐANG ĐỌC VÀ TÌM KIẾM...</div>
+        </div>
     </div>
   </div>
 
-  <script>
-    let data = [];
-    let fuse = null;
-    let searchTimeout;
-    let stream = null;
+  <div class="p-4">
+    <div class="mb-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+        <div class="flex justify-between items-center mb-1">
+            <label class="text-[10px] font-black text-gray-400 uppercase">Văn bản nhận diện được:</label>
+            <span id="matchStatus" class="text-[10px] font-bold"></span>
+        </div>
+        <input id="ocrResult" type="text" onkeyup="manualSearch()" 
+               class="w-full bg-transparent border-none p-0 text-gray-700 font-medium focus:ring-0 text-sm italic" placeholder="Chưa có dữ liệu quét...">
+    </div>
 
-    // --- QUẢN LÝ DỮ LIỆU ---
-    function processRawData(json) {
-      if (!json || !json.data_table) {
-        alert("Định dạng dữ liệu JSON không hợp lệ!");
-        return;
-      }
+    <div class="flex items-center gap-2 mb-6">
+        <input type="file" id="upload" accept=".json" class="hidden" onchange="initDataFromFile(event)">
+        <label for="upload" class="bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md cursor-pointer">📂 NẠP FILE JSON KHOÁ HỌC</label>
+        <div id="count" class="text-xs font-mono text-slate-400">ĐANG TẢI...</div>
+    </div>
 
-      data = json.data_table.map((item, i) => {
-        let ans = (item.col_7 || "").toString().trim().toUpperCase();
-        if (ans === "A") ans = 1; 
-        else if (ans === "B") ans = 2;
-        else if (ans === "C") ans = 3; 
-        else if (ans === "D") ans = 4;
-        else ans = Number(ans);
+    <div id="displayArea" class="space-y-4">
+        <div class="text-center py-12 text-gray-300">
+            <p class="text-3xl mb-2">🔍</p>
+            <p class="text-sm">Đưa khung quét vào dòng chữ câu hỏi</p>
+        </div>
+    </div>
+  </div>
 
-        const raw = [
-          item.col_1 || (i + 1),
-          item.col_2 || "",
-          item.col_3 || "",
-          item.col_4 || "",
-          item.col_5 || "",
-          item.col_6 || "",
-          ans
-        ];
+  <canvas id="procCanvas" class="hidden"></canvas>
 
-        return { 
-          id: i + 1, 
-          question: item.col_2 || "", 
-          normalized: removeAccents(item.col_2 || ""), 
-          raw: raw 
-        };
-      });
+<script>
+let store = [];
+let searchEngine;
+let stream;
 
-      // Tối ưu hóa cấu hình Fuse.js cho câu hỏi dài
-      fuse = new Fuse(data, { 
-        keys: ["normalized"], 
-        threshold: 0.3,
-        ignoreLocation: true,
-        minMatchCharLength: 2
-      });
+window.onload = async () => {
+    // Khởi tạo camera
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment", width: { ideal: 1920 } } 
+        });
+        document.getElementById('video').srcObject = stream;
+    } catch (e) { alert("Lỗi camera: Hãy đảm bảo bạn dùng HTTPS và cấp quyền máy ảnh."); }
 
-      document.getElementById('loadingStatus').className = "hidden";
-      document.getElementById('fallbackUpload').classList.add('hidden');
-      renderTable(data.map(d => d.raw));
-    }
-
-    async function loadJsonData() {
-      try {
+    // Tự động tải data_1.json từ cùng thư mục
+    try {
         const response = await fetch('data_1.json');
-        if (!response.ok) throw new Error("HTTP error " + response.status);
-        const json = await response.json();
-        processRawData(json);
-      } catch (error) {
-        console.warn("Không thể tự động tải data_1.json:", error);
-        document.getElementById('loadingStatus').className = "hidden";
-        document.getElementById('fallbackUpload').classList.remove('hidden');
-      }
+        if (response.ok) {
+            const json = await response.json();
+            parseAndInitJSON(json);
+        } else {
+            document.getElementById('count').innerText = 'OFFLINE (Hãy chọn file JSON)';
+        }
+    } catch (err) {
+        document.getElementById('count').innerText = 'OFFLINE (Hãy chọn file JSON)';
     }
+};
 
-    function handleManualFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
+function parseAndInitJSON(jsonData) {
+    const rawList = jsonData.data_table || [];
+    
+    store = rawList.map(item => ({
+        id: item.col_1,
+        title: item.col_2,
+        options: [item.col_3, item.col_4, item.col_5, item.col_6],
+        ans: parseInt(item.col_7),
+        doc: item.col_8,
+        clean: fastClean(item.col_2)
+    }));
+
+    searchEngine = new Fuse(store, { 
+        keys: ['clean'], 
+        threshold: 0.35,
+        distance: 150,
+        ignoreLocation: false
+    });
+    
+    document.getElementById('count').innerText = `READY: ${store.length} CÂU`;
+}
+
+function initDataFromFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
         try {
-          const json = JSON.parse(e.target.result);
-          processRawData(json);
+            const json = JSON.parse(event.target.result);
+            parseAndInitJSON(json);
         } catch (err) {
-          alert("Lỗi đọc file JSON: Cấu trúc file không đúng!");
+            alert("File JSON không hợp lệ!");
         }
-      };
-      reader.readAsText(file);
+    };
+    reader.readAsText(file);
+}
+
+async function smartCapture() {
+    if (!store.length) return alert("Vui lòng nạp dữ liệu JSON trước!");
+    
+    const v = document.getElementById('video');
+    const canvas = document.getElementById('procCanvas');
+    const ctx = canvas.getContext('2d');
+    const loader = document.getElementById('loader');
+
+    loader.style.display = 'flex';
+
+    const ratio = v.videoWidth / v.clientWidth;
+    const w = (v.clientWidth * 0.92) * ratio;
+    const h = 70 * ratio;
+    const x = (v.videoWidth - w) / 2;
+    const y = (v.videoHeight - h) / 2;
+
+    canvas.width = w;
+    canvas.height = h;
+    
+    ctx.filter = 'grayscale(1) contrast(1.5) brightness(1.2)';
+    ctx.drawImage(v, x, y, w, h, 0, 0, w, h);
+
+    try {
+        const out = await Tesseract.recognize(canvas.toDataURL('image/png'), 'vie');
+        const text = out.data.text.replace(/\s+/g, ' ').trim();
+        document.getElementById('ocrResult').value = text;
+        execSearch(text);
+    } catch (err) { console.error(err); }
+
+    loader.style.display = 'none';
+}
+
+function fastClean(s) {
+    if (!s) return "";
+    return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+}
+
+function manualSearch() {
+    execSearch(document.getElementById('ocrResult').value);
+}
+
+function execSearch(txt) {
+    const q = fastClean(txt);
+    const box = document.getElementById('displayArea');
+    const status = document.getElementById('matchStatus');
+    if (!q) return;
+
+    const matches = searchEngine.search(q).slice(0, 3);
+    
+    if (!matches.length) {
+        status.innerText = "❌ KHÔNG KHỚP";
+        status.className = "text-[10px] font-bold text-red-500";
+        box.innerHTML = `<div class="text-center text-gray-400 py-10">Không tìm thấy câu hỏi phù hợp trong dữ liệu.</div>`;
+        return;
     }
 
-    window.addEventListener('DOMContentLoaded', loadJsonData);
+    status.innerText = `✅ TÌM THẤY ${matches.length} KẾT QUẢ`;
+    status.className = "text-[10px] font-bold text-emerald-600";
 
-    // --- XỬ LÝ CAMERA OCR ---
-    async function toggleCamera() {
-      const container = document.getElementById('videoContainer');
-      const video = document.getElementById('video');
-      
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-        container.style.display = 'none';
-      } else {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-          video.srcObject = stream;
-          container.style.display = 'block';
-        } catch (err) {
-          alert("Không thể truy cập Camera. Hãy đảm bảo bạn đã cấp quyền sử dụng camera cho trình duyệt!");
-        }
-      }
-    }
-
-    async function captureImage() {
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('canvas');
-      const status = document.getElementById('ocrStatus');
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-
-      status.style.display = 'block';
-      
-      try {
-        const result = await Tesseract.recognize(canvas.toDataURL('image/png'), 'vie+eng');
-        const text = result.data.text.replace(/\n/g, ' ').trim();
-        document.getElementById('searchInput').value = text;
-        searchData();
-      } catch (e) {
-        console.error(e);
-        alert("Lỗi nhận diện hình ảnh.");
-      } finally {
-        status.style.display = 'none';
-      }
-    }
-
-    // --- THUẬT TOÁN & HIỂN THỊ TÌM KIẾM ---
-    function removeAccents(str) {
-      if (!str) return "";
-      return str.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
-    }
-
-    function renderTable(arr) {
-      const tbody = document.getElementById("tableBody");
-      tbody.innerHTML = "";
-      
-      // Giới hạn hiển thị 30 dòng đầu tiên để tránh quá tải DOM điện thoại
-      const displayArr = arr.slice(0, 30);
-
-      displayArr.forEach((row) => {
-        const tr = document.createElement("tr");
-        const correctIdx = Number(row[6]);
-        
-        for (let i = 0; i < 7; i++) {
-          const td = document.createElement("td");
-          td.innerHTML = row[i] ?? "";
-          if (i === 1 + correctIdx) td.classList.add("bold-blue");
-          else if ([2, 3, 4, 5].includes(i)) td.classList.add("italic-tiny");
-          tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-      });
-    }
-
-    function debounceSearch() {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(searchData, 250);
-    }
-
-    function searchData() {
-      if (!fuse) return;
-      const kw = removeAccents(document.getElementById("searchInput").value.trim());
-      if (!kw) { 
-        renderTable(data.map(d => d.raw)); 
-        document.getElementById("suggestionBox").textContent = "";
-        return; 
-      }
-      
-      const res = fuse.search(kw);
-      renderTable(res.map(r => r.item.raw));
-      document.getElementById("suggestionBox").textContent = `Tìm thấy ${res.length} kết quả phù hợp.`;
-    }
-
-    function clearSearch() {
-      document.getElementById("searchInput").value = "";
-      searchData();
-    }
-  </script>
+    box.innerHTML = matches.map((m, idx) => {
+        const item = m.item;
+        return `
+            <div class="result-card ${idx === 0 ? 'best-match' : ''}">
+                <div class="flex items-start gap-3 mb-3">
+                    <span class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-black">#${item.id}</span>
+                    <h3 class="font-bold text-slate-800 leading-snug text-sm">${item.title}</h3>
+                </div>
+                <div class="space-y-1">
+                    ${item.options.map((opt, i) => opt ? `
+                        <div class="ans-item ${i+1 === item.ans ? 'is-true' : 'is-false'}">
+                            <span class="inline-block w-5">${i+1 === item.ans ? '●' : '○'}</span> ${opt}
+                        </div>
+                    ` : '').join('')}
+                </div>
+                ${item.doc ? `<div class="mt-2 text-[10px] text-gray-400 italic">Căn cứ: ${item.doc}</div>` : ''}
+                ${idx === 0 ? '<div class="mt-2 text-[9px] font-bold text-emerald-600 text-right uppercase tracking-widest">Khớp nhiều nhất</div>' : ''}
+            </div>
+        `;
+    }).join('');
+}
+</script>
 </body>
 </html>
